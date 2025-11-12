@@ -1,11 +1,11 @@
 {
-    "function_type": "exponential_decay",
+    "function_type": "mixed",
     "n_train": 10000,
     "n_val": 1000,
-    "seq_len": 400,
+    "seq_len": 512,
     "dim": 1,
     "batch_size": 128,
-    "epochs": 100,
+    "epochs": 120,
     "learning_rate": 0.0005,
     "d_model": 256,
     "nhead": 4,
@@ -18,6 +18,6 @@
     "loss_type": "combined",
     "save_dir": "experiments",
     "lambda_decay": 1.0,
-    "top_k": 5,
-    "poly_degree": 4
+    "top_k": 4,
+    "poly_degree": 3
 }

@@ -155,7 +155,7 @@ class TrendSynthesisLayer(nn.Module):
     Trend synthesis using polynomial regression.
 
     Captures smooth, slow-varying components using polynomial basis functions.
-    Based on N-BEATS architecture and Diffusion-TS decomposition.
+    Based Diffusion-TS decomposition.
 
     Args:
         input_dim: Input feature dimension
@@ -171,7 +171,7 @@ class TrendSynthesisLayer(nn.Module):
 
         # Create polynomial basis: [1, t, t^2, ..., t^p]
         c = torch.arange(seq_len, dtype=torch.float32) / seq_len
-        self.register_buffer('poly_basis', torch.stack([c ** i for i in range(poly_degree + 1)], dim=1))
+        self.register_buffer('poly_basis', torch.stack([c ** i  for i in range(poly_degree + 1)], dim=1))
 
     def forward(self, x: torch.Tensor, mean_val: torch.Tensor) -> torch.Tensor:
         """

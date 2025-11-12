@@ -6,13 +6,3 @@ numpy>=1.23.0
 matplotlib>=3.5.0
 tqdm>=4.64.0
 
-# Optional dependencies for datasets
-pandas>=1.5.0
-scikit-learn>=1.2.0
-scipy>=1.10.0
-
-# For C-MAPSS and other datasets
-h5py>=3.7.0
-
-# For battery simulation (optional)
-# pybamm>=23.0  # Uncomment if using NASA battery dataset

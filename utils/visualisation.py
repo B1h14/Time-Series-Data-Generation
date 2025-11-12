@@ -55,7 +55,40 @@ def visualize_samples(
     plt.savefig(save_path, dpi=150, bbox_inches='tight')
     plt.close()
     print(f"Samples saved to {save_path}")
+def visualize_diffusion_process(
+        model : nn.Module,
+        diffusion : nn.Module, 
+        n_samples: int = 5,
+        seq_len: int = 512,
+        save_path: str = 'samples.png'
+        )-> None:
+    """Generate and visualize samples."""
+    device = next(model.parameters()).device
+    model.eval()
 
+    with torch.no_grad():
+        samples, intermediates = diffusion.sample(n_samples, seq_len, 1, return_intermediates=True)
+        samples = samples.cpu().numpy()
+    displayed_intermediates = [intermediates[i].cpu().numpy() for i in range(0, len(intermediates), max(1, len(intermediates)//5))]
+    fig, axes = plt.subplots(n_samples, 5, figsize=(12, 2 * n_samples))
+    if n_samples == 1:
+        axes = [axes]
+    for j in range(5):
+        for i in range(n_samples):
+            axes[i][j].plot(displayed_intermediates[j][i, :, 0])
+            if i == 0:
+                axes[i][j].set_title(f'Sample {i+1} - Step {max(1, len(intermediates)//5) * (j+1)}')
+            else:
+                axes[i][j].set_title(f'Step {max(1, len(intermediates)//5) * (j+1)}')
+            axes[i][j].set_xlabel('Time Step')
+            axes[i][j].set_ylabel('Value')
+            axes[i][j].grid(True, alpha=0.3)
+
+
+    plt.tight_layout()
+    plt.savefig(save_path, dpi=150, bbox_inches='tight')
+    plt.close()
+    print(f"Samples saved to {save_path}")
 
 def visualize_decomposition(
         model: nn.Module,

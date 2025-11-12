@@ -163,7 +163,7 @@ def main():
     plt.title('Training Curves')
     plt.legend()
     plt.grid(True, alpha=0.3)
-    plt.savefig(os.path.join(config['save_dir'], 'training_curves.png'), 
+    plt.savefig(os.path.join(config['save_dir'], args.suffix, 'training_curves.png'), 
                 dpi=150, bbox_inches='tight')
     plt.close()
 
@@ -175,7 +175,7 @@ def main():
                           save_path=os.path.join(config['save_dir'], args.suffix, 'decomposition.png'))
 
     print(f"\nTraining complete! Best validation loss: {best_val_loss:.6f}")
-    print(f"Results saved to {config['save_dir']}/")
+    print(f"Results saved to {config['save_dir']}/{args.suffix}/")
 
 
 if __name__ == '__main__':
