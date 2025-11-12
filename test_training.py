@@ -1,6 +1,29 @@
 """
 Training script for diffusion-based time series generation model.
 ================================================================
+
+This script sets up the training environment, generates synthetic datasets,
+defines the model architecture, and trains the diffusion model on the generated data.
+It also includes logging and visualization of training progress and results.
+
+Usage:
+```bash
+python test_training.py --config config.json --log_dir logs --suffix experiment_1
+```
+
+Options:
+- `--config`: Path to the configuration JSON file.
+- `--log_dir`: Directory for logging (default: logs/).
+- `--suffix`: Suffix for experiment naming and result saving.
+
+Supported Functions:
+- Sine waves : `sine` -> sin(ωt + φ) + ε
+- Cosine waves : `cosine` -> cos(ωt + φ) + ε
+- Mixed sine and cosine waves : `mixed` -> a₁·sin(ω₁t + φ₁) + a₂·cos(ω₂t + φ₂) + ε
+- Exponential decay : `exponential_decay` -> A·exp(-λt) + ε
+- Custom decay function : `custom_decay` -> f(t)·[sin(ω₁t + φ₁) + cos(ω₂t + φ₂)] + ε
+where f(t) = 1/(1 + λt)
+
 """
 import torch
 import torch.nn as nn

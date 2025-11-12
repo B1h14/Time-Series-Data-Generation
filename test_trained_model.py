@@ -1,3 +1,23 @@
+"""
+Test script for diffusion-based time series generation model.
+================================================================
+
+This script loads a trained diffusion model and evaluates its performance
+on generating time series data. It includes visualization of the diffusion
+process and saves the results.
+
+Usage:
+```bash
+python test_trained_model.py --model model.pth --save_dir results/ --experiment_name test_experiment
+```
+
+Options:
+- `--model`: Path to the trained model file.
+- `--save_dir`: Directory to save the results.
+- `--experiment_name`: Name of the experiment for saving results.
+
+"""
+
 import torch
 import os
 from models.diffusion_ts_model import (

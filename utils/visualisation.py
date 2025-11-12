@@ -8,6 +8,7 @@ and to visualize the trend and seasonality decomposition of time series data.
 Functions:
 - visualize_samples: Generates and visualizes samples from a diffusion model.
 - visualize_decomposition: Visualizes the trend and seasonality components of a time series.
+- visualize_diffusion_process: Visualizes the diffusion process of generated samples.
 
 Usage:
 ------
@@ -18,6 +19,9 @@ import torch
 visualize_samples(model, diffusion, n_samples=5, seq_len=512, save_path='samples.png')
 data_sample = torch.randn(512, 1)  # Example data sample
 visualize_decomposition(model, data_sample, save_path='decomposition.png')
+
+# Visualize the diffusion process:
+visualize_diffusion_process(model, diffusion, n_samples=5, seq_len=512, save_path='diffusion_process.png')
 
 """
 
@@ -62,7 +66,7 @@ def visualize_diffusion_process(
         seq_len: int = 512,
         save_path: str = 'samples.png'
         )-> None:
-    """Generate and visualize samples."""
+    """Generate and visualize samples showing the diffusion process."""
     device = next(model.parameters()).device
     model.eval()
 

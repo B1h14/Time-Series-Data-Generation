@@ -2,6 +2,28 @@
 Training script for diffusion-based time series generation model.
 ================================================================
 Contains functions for training and evaluating the model.
+
+Main functions:
+- train_epoch: Train the model for one epoch.
+- evaluate: Evaluate the model on a validation set.
+
+Usage Example:
+```python   
+from models.train_diffusion_ts import train_epoch, evaluate
+
+model = DiffusionTransformer(...)
+diffusion = GaussianDiffusion(...)
+train_loader = DataLoader(...)
+val_loader = DataLoader(...)
+optimizer = optim.Adam(...)
+device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+
+train_loss = train_epoch(model, diffusion, train_loader, optimizer, device)
+val_loss = evaluate(model, diffusion, val_loader, device)
+```
+
+
+
 """
 import torch
 import torch.nn as nn

@@ -16,7 +16,7 @@ This implementation combines several cutting-edge techniques:
    - Patch-based processing for efficiency
    - Positional encodings (sinusoidal + RoPE)
 
-3. **Diffusion Process** (from multiple papers)
+3. **Diffusion Process**
    - Denoising score matching
    - Multiple noise schedules (linear, cosine)
    - Fourier-based loss for frequency accuracy
@@ -30,12 +30,17 @@ This implementation combines several cutting-edge techniques:
 
 ```
 .
-├── diffusion_ts_model.py      # Core model implementation
-├── train_diffusion_ts.py       # Training script
-├── test_functions.py           # Test on synthetic functions
-├── test_datasets.py            # Test on real datasets
-├── README.md                   # This file
-└── experiments/                # Output directory
+├─| models/      
+  ├── diffusion_ts_model.py      # Core model implementation
+  └── train_diffusion_ts.py      # Training functions
+├─| utils/ 
+  ├── visualisation.py           # Visualization functions for 1d data
+  ├── data_generators.py         # Generating synthetic data using simple function
+  └── logger_setup.py            # Logging setup
+├── requirements.txt             # The required libraries
+├── config.json                  # Configuration file
+├── README.md                    # This file
+└── experiments/                 # Output directory for training results and checkpoints
 ```
 
 ## Installation
@@ -70,7 +75,8 @@ model = DiffusionTransformer(
 # Create diffusion process
 diffusion = GaussianDiffusion(
     model=model,
-    timesteps=1000,
+    timesteps=512,
+    beta_schedule='cosine',
     loss_type='fourier'
 )
 
@@ -79,31 +85,17 @@ samples = diffusion.sample(batch_size=10, seq_len=512, dim=1)
 print(f"Generated samples shape: {samples.shape}")
 ```
 
-### 2. Train on Synthetic Data
-
-```bash
-# Train on sine waves
-python train_diffusion_ts.py
-
-# The script will:
-# - Generate synthetic data
-# - Train the model
-# - Save checkpoints
-# - Generate visualizations
-```
-
-### 3. Test Different Functions
+### 2. Test the training on simple functions
 
 ```bash
 # Test all function types
-python test_functions.py
+python test_training.py --config config.json --log_dir logs --suffix experiment_1
 
-# Tests include:
-# - Simple sine/cosine waves
-# - Mixed periodic functions
-# - Exponential decay
-# - Custom decay functions
-# - All with Gaussian noise
+# args :
+# - config : the path to the config file 
+# - log_dir : the directory for the logging, defaults to logs/
+# - suffix : the name of the experiment for clearer saving of results of 
+
 ```
 
 ## Model Architecture
@@ -202,7 +194,6 @@ from train_diffusion_ts import train_epoch, evaluate
 for epoch in range(epochs):
     train_loss = train_epoch(model, diffusion, train_loader, optimizer, device)
     val_loss = evaluate(model, diffusion, val_loader, device)
-    scheduler.step()
 ```
 
 ## Testing
