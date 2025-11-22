@@ -98,3 +98,42 @@ def create_synthetic_dataset(n_samples: int = 10000,
         all_samples.append(signal.unsqueeze(-1))
 
     return torch.stack(all_samples)
+
+
+def create_labeled_dataset(
+    n_samples: int = 10000,
+    seq_len: int = 512,
+    dim: int = 1,
+    function_types: list = None
+):
+    """
+    Create a labeled synthetic dataset (X, y).
+    Each sample is generated from a chosen function type.
+    
+    Returns:
+        X : tensor of shape (n_samples, seq_len, dim)
+        y : tensor of shape (n_samples,)
+    """
+
+    if function_types is None:
+        function_types = ['sine', 'cosine', 'mixed', 'exponential_decay']
+
+    X_list = []
+    y_list = []
+
+    for i in range(n_samples):
+        func = np.random.choice(function_types)
+        x = create_synthetic_dataset(
+            n_samples=1,
+            seq_len=seq_len,
+            dim=dim,
+            function_type=func
+        )[0]  # remove batch dim
+
+        X_list.append(x)
+        y_list.append(function_types.index(func))
+
+    X = torch.stack(X_list)
+    y = torch.tensor(y_list, dtype=torch.long)
+
+    return X, y
