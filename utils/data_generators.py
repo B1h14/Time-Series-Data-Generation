@@ -78,7 +78,15 @@ def create_synthetic_dataset(n_samples: int = 10000,
             # Exponential decay with periodic component
             decay = torch.exp(-lambda_decay * t / (4 * np.pi))
             signal = decay * torch.sin(freq1 * t + phase1)
-
+        elif function_type == 'linear_sum':
+            # Linear decay with periodic component
+            a_1 = np.random.uniform(0.2, 0.8)
+            a_2 = np.random.uniform(0.2, 0.8)
+            a_3 = np.random.uniform(0.2, 0.8)
+            start = np.random.uniform(0.5, 1.0)
+            end = np.random.uniform(-1.0, 0.0) 
+            X = torch.linspace(start, end, seq_len)
+            signal = a_1 * X + a_2 * torch.sin(2 * np.pi * t + phase1) + a_3 * torch.cos(4 * np.pi * t + phase2)
         elif function_type == 'custom_decay':
             # Custom decay function f(t) that tends to 0
             if custom_func is not None:
