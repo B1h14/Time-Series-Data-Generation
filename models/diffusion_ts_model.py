@@ -149,6 +149,53 @@ class TimeEmbedding(nn.Module):
         emb = torch.cat([torch.sin(emb), torch.cos(emb)], dim=-1)
         return emb
 
+class ClassEmbedding(nn.Module):
+    """
+    Embedding for class labels for conditional generation.
+
+    Maps discrete class labels to continuous embeddings that modulate
+    the network layers based on the class information.
+    
+    For classifier-free guidance, allocates an extra embedding slot
+    (index num_classes) for the null/unconditional class.
+
+    Args:
+        num_classes: Number of actual classes (e.g., 3 for sine, cosine, mixed)
+        dim: Embedding dimension (should match d_model)
+        null_class: If True, allocate extra slot for null class (for classifier-free guidance)
+    
+    Example:
+        >>> # For 3 classes with classifier-free guidance
+        >>> emb = ClassEmbedding(num_classes=3, dim=256, null_class=True)
+        >>> # Embedding layer will have 4 slots: [0, 1, 2] for classes, [3] for null
+        >>> 
+        >>> y = torch.tensor([0, 1, 2, 3])  # [class_0, class_1, class_2, null]
+        >>> embeddings = emb(y)  # All valid, no index error
+    """
+    def __init__(self, num_classes: int, dim: int, null_class: bool = True):
+        super().__init__()
+        # Allocate num_classes+1 embeddings if using classifier-free guidance
+        # The extra embedding at index num_classes is for unconditional generation
+        num_embeddings = num_classes + 1 if null_class else num_classes
+        self.embedding = nn.Embedding(num_embeddings, dim)
+        self.num_classes = num_classes
+        self.null_class_enabled = null_class
+        
+        # Initialize the null class embedding to zeros (common practice)
+        if null_class:
+            with torch.no_grad():
+                self.embedding.weight[num_classes].zero_()
+
+    def forward(self, y: torch.Tensor) -> torch.Tensor:
+        """
+        Args:
+            y: Class labels (batch_size,)
+               Values should be in [0, num_classes-1] for actual classes
+               or num_classes for null/unconditional class
+        Returns:
+            Class embeddings (batch_size, dim)
+        """
+        return self.embedding(y)
 
 class TrendSynthesisLayer(nn.Module):
     """
@@ -311,7 +358,7 @@ class DecompositionBlock(nn.Module):
         # Decompose into trend and seasonality
         mean_val = x.mean(dim=1, keepdim=True)
         trend = self.trend_layer(x, mean_val)
-        seasonality = self.fourier_layer(x)
+        seasonality = self.fourier_layer(x - trend)
 
         return x, trend, seasonality
 
@@ -351,7 +398,8 @@ class DiffusionTransformer(nn.Module):
                  seq_len: int = 512,
                  top_k: int = 5,
                  poly_degree: int = 3,
-                 patch_size: int = 8):
+                 patch_size: int = 8,
+                 num_classes: int = 0):   # NEW: optional number of conditioning classes
         super().__init__()
 
         self.input_dim = input_dim
@@ -374,6 +422,9 @@ class DiffusionTransformer(nn.Module):
             nn.SiLU(),
             nn.Linear(d_model * 4, d_model)
         )
+
+        # Optional class embedding for conditioning (if num_classes > 0)
+        self.class_emb = ClassEmbedding(num_classes, d_model) if num_classes > 0 else None
 
         # Transformer encoder
         encoder_layer = nn.TransformerEncoderLayer(
@@ -419,7 +470,9 @@ class DiffusionTransformer(nn.Module):
         return x
 
     def forward(self, x: torch.Tensor, t: torch.Tensor, 
-                mask: Optional[torch.Tensor] = None) -> Dict[str, torch.Tensor]:
+                mask: Optional[torch.Tensor] = None,
+                y: Optional[torch.Tensor] = None,            
+                force_uncond: bool = False) -> Dict[str, torch.Tensor]: 
         """
         Forward pass through the model.
 
@@ -427,6 +480,8 @@ class DiffusionTransformer(nn.Module):
             x: Noisy input (batch, seq_len, input_dim)
             t: Timesteps (batch,)
             mask: Optional mask for conditional generation (batch, seq_len)
+            y: Optional class labels for conditioning (batch,)
+            force_uncond: If True, force unconditional generation
         Returns:
             Dictionary with 'output', 'trend', 'seasonality' tensors
         """
@@ -453,6 +508,17 @@ class DiffusionTransformer(nn.Module):
 
         # Get time embedding
         time_emb = self.time_mlp(t.float())
+
+        # Merge class embedding (if present) into time embedding for conditioning
+        if self.class_emb is not None:
+            # Default to class 0 when labels are not provided
+            if y is None:
+                y = torch.zeros(batch_size, dtype=torch.long, device=x.device)
+            # If force_uncond, override labels to class 0 (simple unconditional strategy)
+            if force_uncond:
+                y = torch.zeros_like(y)
+            class_embedding = self.class_emb(y)
+            time_emb = time_emb + class_embedding
 
         # Decode with decomposition
         h = x_emb
@@ -586,7 +652,8 @@ class GaussianDiffusion(nn.Module):
         return time_loss + freq_loss
 
     def training_loss(self, x_start: torch.Tensor, t: torch.Tensor, 
-                     mask: Optional[torch.Tensor] = None) -> Dict[str, torch.Tensor]:
+                     mask: Optional[torch.Tensor] = None,
+                     y: Optional[torch.Tensor] = None) -> Dict[str, torch.Tensor]:
         """
         Compute training loss.
 
@@ -594,6 +661,7 @@ class GaussianDiffusion(nn.Module):
             x_start: Clean data (batch, seq_len, dim)
             t: Timesteps (batch,)
             mask: Optional mask for conditional training
+            y: Optional class labels for conditioning
         Returns:
             Dictionary with loss components
         """
@@ -601,8 +669,8 @@ class GaussianDiffusion(nn.Module):
         noise = torch.randn_like(x_start)
         x_t = self.q_sample(x_start, t, noise)
 
-        # Predict clean signal
-        model_out = self.model(x_t, t, mask)
+        # Predict clean signal (pass labels through)
+        model_out = self.model(x_t, t, mask, y)
         pred_x0 = model_out['output']
 
         # Compute loss based on loss type
@@ -625,7 +693,8 @@ class GaussianDiffusion(nn.Module):
         }
 
     @torch.no_grad()
-    def p_sample(self, x: torch.Tensor, t: int, mask: Optional[torch.Tensor] = None) -> torch.Tensor:
+    def p_sample(self, x: torch.Tensor, t: int, mask: Optional[torch.Tensor] = None,
+                 y: Optional[torch.Tensor] = None, force_uncond: bool = False) -> torch.Tensor:
         """
         Single step of reverse diffusion (DDPM sampling).
 
@@ -633,14 +702,16 @@ class GaussianDiffusion(nn.Module):
             x: Current noisy sample (batch, seq_len, dim)
             t: Current timestep
             mask: Optional mask for conditional generation
+            y: Optional class labels for conditioning
+            force_uncond: If True, force unconditional generation at model call
         Returns:
             Denoised sample at t-1
         """
         batch_size = x.shape[0]
         t_tensor = torch.full((batch_size,), t, device=x.device, dtype=torch.long)
 
-        # Predict x0
-        model_out = self.model(x, t_tensor, mask)
+        # Predict x0 (pass class labels and force_uncond through)
+        model_out = self.model(x, t_tensor, mask, y, force_uncond)
         pred_x0 = model_out['output']
 
         # Clip prediction
@@ -664,8 +735,10 @@ class GaussianDiffusion(nn.Module):
 
     @torch.no_grad()
     def sample(self, batch_size: int, seq_len: int, dim: int, 
-              mask: Optional[torch.Tensor] = None, 
-              return_intermediates: bool = False) -> torch.Tensor:
+               mask: Optional[torch.Tensor] = None, 
+               y: Optional[torch.Tensor] = None,
+               force_uncond: bool = False,
+               return_intermediates: bool = False) -> torch.Tensor:
         """
         Generate samples using DDPM sampling.
 
@@ -674,6 +747,8 @@ class GaussianDiffusion(nn.Module):
             seq_len: Sequence length
             dim: Feature dimension
             mask: Optional mask for conditional generation
+            y: Optional class labels for conditioning (batch_size,)
+            force_uncond: If True, force unconditional generation in model calls
             return_intermediates: Whether to return intermediate steps
         Returns:
             Generated samples (batch, seq_len, dim)
@@ -688,7 +763,7 @@ class GaussianDiffusion(nn.Module):
 
         # Reverse diffusion
         for t in reversed(range(self.timesteps)):
-            x = self.p_sample(x, t, mask)
+            x = self.p_sample(x, t, mask, y, force_uncond)
             if return_intermediates:
                 intermediates.append(x.cpu())
 
@@ -793,6 +868,51 @@ if __name__ == "__main__":
     with torch.no_grad():
         samples = diffusion.sample(batch_size=2, seq_len=512, dim=1)
         print(f"Generated samples shape: {samples.shape}")
+
+    # --- Added: Conditional generation test ---
+    print("\nTesting conditional generation...")
+
+    # Create conditional model with 3 classes
+    cond_model = DiffusionTransformer(
+        input_dim=1,
+        d_model=256,
+        nhead=4,
+        num_encoder_layers=3,
+        num_decoder_layers=3,
+        dim_feedforward=512,
+        seq_len=512,
+        patch_size=8,
+        num_classes=3
+    ).to(device)
+
+    cond_diffusion = GaussianDiffusion(
+        model=cond_model,
+        timesteps=100,
+        beta_schedule='cosine',
+        loss_type='fourier'
+    ).to(device)
+
+    # Reuse x_test / t_test from above (shape batch=4) and create class labels
+    y_train = torch.randint(0, 3, (4,), device=device)
+
+    with torch.no_grad():
+        # Conditioned forward pass
+        output_cond = cond_model(x_test, t_test, y=y_train)
+        print(f"Conditional forward output shape: {output_cond['output'].shape}")
+
+        # Conditioned training loss
+        loss_cond = cond_diffusion.training_loss(x_test, t_test, y=y_train)
+        print(f"Conditional training loss: {loss_cond['loss'].item():.6f}")
+
+        # Conditioned sampling (batch_size=2)
+        y_sample = torch.tensor([0, 1], device=device)
+        samples_cond = cond_diffusion.sample(batch_size=2, seq_len=512, dim=1, y=y_sample)
+        print(f"Conditional samples shape: {samples_cond.shape}")
+
+        # Forced-unconditional sampling
+        samples_uncond = cond_diffusion.sample(batch_size=2, seq_len=512, dim=1, y=y_sample, force_uncond=True)
+        print(f"Forced-unconditional samples shape: {samples_uncond.shape}")
+    # --- End added block ---
 
     print("\n" + "=" * 60)
     print("All tests passed successfully!")
